@@ -8,63 +8,71 @@ from datamodel import OrderDepth, TradingState, Order, Trade, Symbol
 
 # ----------------------------------------------------------------------------------------------------------------
 
-charts = {} # {'BAN': df}
-has_run = False
+charts = pd.DataFrame()
+first_run = True
+iter = 0
 
 # ----------------------------------------------------------------------------------------------------------------
 
 # get the most updated price of product
-def get_new_prices(own_trades: Dict[Symbol, List[Trade]], market_trades: Dict[Symbol, List[Trade]]):
-    new_prices = {}
 
-    for symbol in market_trades:
-        total = 0
-        quantity = 0
+
+def get_new_price(own_trades: Dict[Symbol, List[Trade]], market_trades: Dict[Symbol, List[Trade]], symbol: Symbol):
+    total = 0
+    quantity = 0
+
+    if symbol in market_trades:
         for trade in market_trades[symbol]:
             total += trade.price * trade.quantity
             quantity += trade.quantity
-        
-        if symbol in own_trades:
-            for trade in own_trades[symbol]:
-                total += trade.price * trade.quantity
-                quantity += trade.quantity
-        
-        new_price = total / quantity
-        new_prices[symbol] = new_price
 
-    return new_prices # {'BAN': $241.12}
+    if symbol in own_trades:
+        for trade in own_trades[symbol]:
+            total += trade.price * trade.quantity
+            quantity += trade.quantity
+
+    if quantity == 0:
+        return None
+
+    return total / quantity
 
 # time_stamp from TradingState called from run function
+
+
 def build_price_chart(state: TradingState):
-    new_prices = get_new_prices(state.own_trades, state.market_trades)
 
-    for symbol in charts:
-        df = charts[symbol]
-        if symbol in new_prices:
-            new_row = pd.DataFrame({'price': new_prices[symbol]}, index=[state.timestamp])
-            df = df.append(new_row)
-        else:
-            new_row = pd.DataFrame({'price': df['price'].iloc[-1]}, index=[state.timestamp])
-            df = df.append(new_row)
+    global charts
 
-# init
-def initalize_price_chart(symbol):
-    df = pd.DataFrame(columns=['price'])
-    charts[symbol] = df
+    # new_prices = get_new_prices(state.own_trades, state.market_trades)
+    new_row = []
 
+    for symbol in state.listings:
+        new_price = get_new_price(
+            state.own_trades, state.market_trades, symbol)
 
+        if new_price == None:
+            new_price = charts[symbol].iloc[-1]
+
+        new_row.append(new_price)
+
+    charts.loc[state.timestamp] = new_row
 
 
 class Trader:
     def run(self, state: TradingState) -> Dict[str, List[Order]]:
-        if not has_run:
-            for symbol in state.listings:
-                if symbol not in charts:
-                    initalize_price_chart(symbol)
-            has_run = True
 
+        global charts, first_run, iter
+        iter += 1
+
+        if first_run:
+            for symbol in state.listings:
+                charts[symbol] = []
+            first_run = False
+
+        build_price_chart(state)
+
+        if iter == 50:
+            print(charts)
 
         result = {}
         return result
-    
-
