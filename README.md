@@ -1,2 +1,2 @@
 # IMC
-Sea shell printer go brrrrr
+market making algo for IMC Prosperity trading competition 
